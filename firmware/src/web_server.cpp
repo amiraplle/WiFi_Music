@@ -1,6 +1,7 @@
 #include "web_server.h"
 #include "web_assets.h"
 #include "audio_ringbuf.h"
+#include "audio_i2s.h"
 #include "display_oled.h"
 #include "stream_client.h"
 #include <WiFi.h>
@@ -106,6 +107,8 @@ void WebServerManager::setupRoutes() {
     json += "\"ssid\":\"" + String(WiFi.SSID()) + "\",";
     json += "\"ip\":\"" + WiFi.localIP().toString() + "\",";
     json += "\"rssi\":" + String(WiFi.RSSI()) + ",";
+    json += "\"volume\":" + String(g_settings.volume) + ",";
+    json += "\"muted\":" + String(g_settings.muted ? "true" : "false") + ",";
     json += "\"oled\":" + String(g_settings.oledEnabled ? "true" : "false");
     json += "}";
     sendJsonResponse(200, json);
@@ -121,6 +124,8 @@ void WebServerManager::setupRoutes() {
     json += "\"bufferMs\":" + String(g_settings.targetBufferMs) + ",";
     json += "\"autoFallback\":" + String(g_settings.autoFallback ? "true" : "false") + ",";
     json += "\"autoReconnect\":" + String(g_settings.autoReconnect ? "true" : "false") + ",";
+    json += "\"volume\":" + String(g_settings.volume) + ",";
+    json += "\"muted\":" + String(g_settings.muted ? "true" : "false") + ",";
     json += "\"oled\":" + String(g_settings.oledEnabled ? "true" : "false");
     json += "}";
     sendJsonResponse(200, json);
@@ -139,6 +144,35 @@ void WebServerManager::setupRoutes() {
     savePreferences();
     restartStreaming();
     sendJsonResponse(200, "{\"ok\":true}");
+  });
+
+  // Digital Volume Control POST
+  _server.on("/api/volume", HTTP_POST, [this]() {
+    if (_server.hasArg("val")) {
+      int v = _server.arg("val").toInt();
+      if (v < 0) v = 0;
+      if (v > 100) v = 100;
+      g_settings.volume = (uint8_t)v;
+      AudioI2S::instance().setVolume(g_settings.volume);
+      DisplayOLED::instance().showVolume(g_settings.volume, g_settings.muted);
+      savePreferences();
+    }
+    String json = "{\"ok\":true,\"volume\":" + String(g_settings.volume) + ",\"muted\":" + (g_settings.muted ? "true" : "false") + "}";
+    sendJsonResponse(200, json);
+  });
+
+  // Mute Control POST
+  _server.on("/api/mute", HTTP_POST, [this]() {
+    if (_server.hasArg("val")) {
+      g_settings.muted = (_server.arg("val") == "1" || _server.arg("val") == "true");
+    } else {
+      g_settings.muted = !g_settings.muted;
+    }
+    AudioI2S::instance().setMute(g_settings.muted);
+    DisplayOLED::instance().showVolume(g_settings.volume, g_settings.muted);
+    savePreferences();
+    String json = "{\"ok\":true,\"volume\":" + String(g_settings.volume) + ",\"muted\":" + (g_settings.muted ? "true" : "false") + "}";
+    sendJsonResponse(200, json);
   });
 
   // OLED Toggle

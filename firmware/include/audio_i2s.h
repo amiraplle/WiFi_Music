@@ -22,6 +22,12 @@ public:
   // Expands mono 16-bit to stereo 16-bit and writes
   size_t writeMonoAsStereo(const uint8_t* monoData, size_t length, uint32_t timeoutTicks = 40);
 
+  // Digital Volume Control (0 - 100%) with perceptual quadratic attenuation
+  void setVolume(uint8_t volumePercent);
+  uint8_t getVolume() const { return _volume; }
+  void setMute(bool muted);
+  bool isMuted() const { return _muted; }
+
   void clearDmaBuffer();
 
 private:
@@ -29,6 +35,9 @@ private:
   ~AudioI2S();
 
   bool _ready;
+  uint8_t _volume;
+  bool _muted;
+  uint32_t _volumeFactor;
   SemaphoreHandle_t _mutex;
   uint8_t _stereoExpandBuffer[I2S_DMA_CHUNK * 2];
 };

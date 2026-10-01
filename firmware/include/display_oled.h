@@ -12,6 +12,7 @@ public:
   void setEnabled(bool enabled);
   bool isEnabled() const { return _enabled; }
   void setVuLevel(uint8_t level) { _vuLevel = level; }
+  void showVolume(uint8_t vol, bool muted);
 
 private:
   DisplayOLED();
@@ -22,4 +23,7 @@ private:
   bool _enabled;
   uint8_t _vuLevel;
   uint32_t _lastRenderMs;
+  uint32_t _volumeOverlayUntilMs;
+  uint8_t _displayVolume;
+  bool _displayMuted;
 };

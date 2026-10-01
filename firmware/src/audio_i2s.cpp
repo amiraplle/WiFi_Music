@@ -6,7 +6,7 @@ AudioI2S& AudioI2S::instance() {
   return inst;
 }
 
-AudioI2S::AudioI2S() : _ready(false) {
+AudioI2S::AudioI2S() : _ready(false), _volume(50), _muted(false), _volumeFactor(16384) {
   _mutex = xSemaphoreCreateMutex();
 }
 
@@ -15,6 +15,20 @@ AudioI2S::~AudioI2S() {
   if (_mutex) {
     vSemaphoreDelete(_mutex);
   }
+}
+
+void AudioI2S::setVolume(uint8_t volumePercent) {
+  if (volumePercent > 100) volumePercent = 100;
+  _volume = volumePercent;
+  // Perceptual quadratic curve: factor = (vol * vol * 65536) / 10000
+  // Gives smooth, natural ear response: -12dB at 50%, -24dB at 25%, -40dB at 10%
+  _volumeFactor = ((uint32_t)_volume * (uint32_t)_volume * 65536UL) / 10000UL;
+  Serial.printf("[AUDIO] Volume set to %u%% (factor: %u)\n", _volume, (unsigned int)_volumeFactor);
+}
+
+void AudioI2S::setMute(bool muted) {
+  _muted = muted;
+  Serial.printf("[AUDIO] Mute %s\n", _muted ? "ENABLED" : "DISABLED");
 }
 
 void AudioI2S::end() {
@@ -113,13 +127,67 @@ void AudioI2S::playTestTone(uint32_t durationMs) {
 size_t AudioI2S::writeSamples(const uint8_t* data, size_t length, uint32_t timeoutTicks) {
   if (!data || length == 0 || !_ready) return 0;
 
-  size_t bytesWritten = 0;
-  if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
-  if (_ready) {
-    i2s_write(I2S_NUM_0, data, length, &bytesWritten, pdMS_TO_TICKS(timeoutTicks));
+  // Handle Mute or 0% Volume
+  if (_muted || _volume == 0) {
+    static const uint8_t zeroBuf[256] = {0};
+    size_t writtenTotal = 0;
+    while (writtenTotal < length) {
+      size_t chunk = min((size_t)(length - writtenTotal), (size_t)sizeof(zeroBuf));
+      size_t bytesWritten = 0;
+      if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
+      if (_ready) {
+        i2s_write(I2S_NUM_0, zeroBuf, chunk, &bytesWritten, pdMS_TO_TICKS(timeoutTicks));
+      }
+      if (_mutex) xSemaphoreGive(_mutex);
+      writtenTotal += chunk;
+      if (bytesWritten == 0) break;
+    }
+    return writtenTotal;
   }
-  if (_mutex) xSemaphoreGive(_mutex);
-  return bytesWritten;
+
+  // At 100% volume, passthrough without calculation
+  if (_volume >= 100) {
+    size_t bytesWritten = 0;
+    if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
+    if (_ready) {
+      i2s_write(I2S_NUM_0, data, length, &bytesWritten, pdMS_TO_TICKS(timeoutTicks));
+    }
+    if (_mutex) xSemaphoreGive(_mutex);
+    return bytesWritten;
+  }
+
+  // Digital Volume Scaling: 16-bit PCM attenuation with soft limiting
+  int16_t scaledChunk[128]; // 256 bytes per chunk
+  const int16_t* srcSamples = reinterpret_cast<const int16_t*>(data);
+  size_t totalSamples = length / 2;
+  size_t samplesProcessed = 0;
+  size_t totalBytesWritten = 0;
+  uint32_t factor = _volumeFactor;
+
+  while (samplesProcessed < totalSamples) {
+    size_t chunkSamples = min((size_t)(totalSamples - samplesProcessed), (size_t)(sizeof(scaledChunk) / sizeof(int16_t)));
+    for (size_t i = 0; i < chunkSamples; i++) {
+      int32_t sample = srcSamples[samplesProcessed + i];
+      int32_t scaled = (sample * (int32_t)factor) >> 16;
+      if (scaled > 32767) scaled = 32767;
+      else if (scaled < -32768) scaled = -32768;
+      scaledChunk[i] = (int16_t)scaled;
+    }
+
+    size_t bytesToWrite = chunkSamples * sizeof(int16_t);
+    size_t bytesWritten = 0;
+    if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
+    if (_ready) {
+      i2s_write(I2S_NUM_0, reinterpret_cast<const uint8_t*>(scaledChunk), bytesToWrite, &bytesWritten, pdMS_TO_TICKS(timeoutTicks));
+    }
+    if (_mutex) xSemaphoreGive(_mutex);
+
+    samplesProcessed += chunkSamples;
+    totalBytesWritten += bytesWritten;
+    if (bytesWritten == 0) break;
+  }
+
+  return totalBytesWritten;
 }
 
 size_t AudioI2S::writeMonoAsStereo(const uint8_t* monoData, size_t length, uint32_t timeoutTicks) {
@@ -133,7 +201,7 @@ size_t AudioI2S::writeMonoAsStereo(const uint8_t* monoData, size_t length, uint3
   int16_t* outSamples = reinterpret_cast<int16_t*>(_stereoExpandBuffer);
 
   for (size_t offset = 0; offset < numSamples; offset += maxSamplesPerChunk) {
-    size_t chunkSamples = min(numSamples - offset, maxSamplesPerChunk);
+    size_t chunkSamples = min((size_t)(numSamples - offset), (size_t)maxSamplesPerChunk);
     for (size_t i = 0; i < chunkSamples; i++) {
       int16_t sample = inSamples[offset + i];
       outSamples[i * 2]     = sample;

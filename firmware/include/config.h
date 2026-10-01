@@ -88,4 +88,6 @@ struct AppSettings {
   bool oledEnabled = true;
   bool streamEnabled = true;
   uint16_t targetBufferMs = 180;
+  uint8_t volume = 50;
+  bool muted = false;
 };

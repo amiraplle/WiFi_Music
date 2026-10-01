@@ -295,6 +295,84 @@ static const char HTML_INDEX[] PROGMEM = R"rawliteral(
       box-shadow: 0 8px 24px rgba(0,0,0,0.5);
     }
     #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* Digital Volume Slider & Presets */
+    .vol-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .vol-slider-wrap { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+    .vol-slider {
+      flex: 1;
+      height: 8px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--surface-high);
+      border-radius: 999px;
+      outline: none;
+      cursor: pointer;
+    }
+    .vol-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--primary);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+    .vol-slider::-webkit-slider-thumb:active {
+      transform: scale(1.15);
+    }
+    .vol-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
+    .vol-preset-btn {
+      padding: 6px 4px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 12px;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .vol-preset-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+    .vol-preset-btn.active { background: var(--primary-container); color: var(--primary); border-color: var(--primary); }
+    .circle-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .circle-btn:active { transform: scale(0.92); }
+    .pill-mute {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .pill-mute.muted {
+      background: rgba(242, 184, 181, 0.15);
+      border-color: rgba(242, 184, 181, 0.4);
+      color: var(--danger);
+    }
   </style>
 </head>
 <body>
@@ -343,6 +421,33 @@ static const char HTML_INDEX[] PROGMEM = R"rawliteral(
           <button class="primary" onclick="postAction('/api/stream/start')">Start</button>
           <button onclick="postAction('/api/stream/stop')">Stop</button>
           <button onclick="postAction('/api/stream/reconnect')">Reconnect</button>
+        </div>
+      </div>
+
+      <!-- DIGITAL VOLUME CONTROL -->
+      <div class="card">
+        <div class="vol-row">
+          <div class="card-title" style="margin-bottom:0;">Output Volume</div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button id="muteBtn" class="pill-mute" onclick="toggleMute()">
+              <span id="muteIcon">🔊</span>
+              <span id="muteText">Unmuted</span>
+            </button>
+            <span id="volValText" style="font-size: 16px; font-weight: 700; color: var(--primary); min-width: 44px; text-align: right;">50%</span>
+          </div>
+        </div>
+
+        <div class="vol-slider-wrap">
+          <button class="circle-btn" onclick="adjustVolume(-5)">−</button>
+          <input type="range" class="vol-slider" id="volSlider" min="0" max="100" value="50" oninput="onVolInput(this.value)" onchange="onVolChange(this.value)">
+          <button class="circle-btn" onclick="adjustVolume(5)">+</button>
+        </div>
+
+        <div class="vol-presets">
+          <button class="vol-preset-btn" onclick="setVolPreset(20)">20% Soft</button>
+          <button class="vol-preset-btn active" id="pbtn50" onclick="setVolPreset(50)">50% Normal</button>
+          <button class="vol-preset-btn" id="pbtn75" onclick="setVolPreset(75)">75% Loud</button>
+          <button class="vol-preset-btn" id="pbtn100" onclick="setVolPreset(100)">100% Max</button>
         </div>
       </div>
 
@@ -661,6 +766,86 @@ static const char HTML_INDEX[] PROGMEM = R"rawliteral(
       return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
     }
 
+    let isDraggingVol = false;
+    let volDebounceTimer = null;
+
+    function onVolInput(val) {
+      isDraggingVol = true;
+      document.getElementById('volValText').textContent = val + '%';
+      updatePresetBtns(val);
+      clearTimeout(volDebounceTimer);
+      volDebounceTimer = setTimeout(() => {
+        sendVolume(val);
+      }, 120);
+    }
+
+    function onVolChange(val) {
+      isDraggingVol = false;
+      sendVolume(val);
+    }
+
+    async function sendVolume(val) {
+      try {
+        await fetch('/api/volume?val=' + encodeURIComponent(val), { method: 'POST' });
+      } catch(e) {}
+    }
+
+    function adjustVolume(delta) {
+      const slider = document.getElementById('volSlider');
+      let v = parseInt(slider.value, 10) + delta;
+      if (v < 0) v = 0;
+      if (v > 100) v = 100;
+      slider.value = v;
+      document.getElementById('volValText').textContent = v + '%';
+      updatePresetBtns(v);
+      sendVolume(v);
+      showToast('Volume ' + v + '%');
+    }
+
+    function setVolPreset(val) {
+      const slider = document.getElementById('volSlider');
+      slider.value = val;
+      document.getElementById('volValText').textContent = val + '%';
+      updatePresetBtns(val);
+      sendVolume(val);
+      showToast('Volume ' + val + '%');
+    }
+
+    function updatePresetBtns(val) {
+      val = parseInt(val, 10);
+      document.querySelectorAll('.vol-preset-btn').forEach(b => b.classList.remove('active'));
+      const btns = document.querySelectorAll('.vol-preset-btn');
+      if (val === 20 && btns[0]) btns[0].classList.add('active');
+      else if (val === 50 && btns[1]) btns[1].classList.add('active');
+      else if (val === 75 && btns[2]) btns[2].classList.add('active');
+      else if (val === 100 && btns[3]) btns[3].classList.add('active');
+    }
+
+    async function toggleMute() {
+      try {
+        const res = await fetch('/api/mute', { method: 'POST' });
+        const d = await res.json();
+        updateMuteUI(d.muted);
+        showToast(d.muted ? 'Audio Muted' : 'Audio Unmuted');
+      } catch(e) {}
+    }
+
+    function updateMuteUI(muted) {
+      const btn = document.getElementById('muteBtn');
+      const icon = document.getElementById('muteIcon');
+      const text = document.getElementById('muteText');
+      if (!btn || !icon || !text) return;
+      if (muted) {
+        btn.classList.add('muted');
+        icon.textContent = '🔇';
+        text.textContent = 'Muted';
+      } else {
+        btn.classList.remove('muted');
+        icon.textContent = '🔊';
+        text.textContent = 'Unmuted';
+      }
+    }
+
     async function pollStatus() {
       try {
         const res = await fetch('/api/status', { cache: 'no-store' });
@@ -681,6 +866,18 @@ static const char HTML_INDEX[] PROGMEM = R"rawliteral(
         const pct = Math.min(100, Math.max(0, d.bufferPercent || 0));
         document.getElementById('bufBar').style.width = pct + '%';
         document.getElementById('bufPercentText').textContent = pct + '%';
+
+        // Digital Volume Sync
+        if (!isDraggingVol && typeof d.volume !== 'undefined') {
+          const vSlider = document.getElementById('volSlider');
+          const vText = document.getElementById('volValText');
+          if (vSlider) vSlider.value = d.volume;
+          if (vText) vText.textContent = d.volume + '%';
+          updatePresetBtns(d.volume);
+        }
+        if (typeof d.muted !== 'undefined') {
+          updateMuteUI(d.muted);
+        }
 
         // Telemetry
         document.getElementById('teleHost').textContent = (d.host || '—') + ' (' + d.mode + ')';

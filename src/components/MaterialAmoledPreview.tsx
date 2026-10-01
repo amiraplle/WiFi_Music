@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Music, Wifi, Radio, Settings, Play, Square, RotateCw, Volume2, HardDrive, Smartphone, Check, Sparkles, Moon, Search, Radar } from 'lucide-react';
+import { Music, Wifi, Radio, Settings, Play, Square, RotateCw, Volume2, VolumeX, HardDrive, Smartphone, Check, Sparkles, Moon, Search, Radar, Minus, Plus } from 'lucide-react';
 
 interface PillSwitchProps {
   checked: boolean;
@@ -50,6 +50,8 @@ export const MaterialAmoledPreview: React.FC = () => {
     { ip: '192.168.254.119', port: 50005, type: 'Android TCP Streamer' },
   ]);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [volume, setVolume] = useState<number>(50);
+  const [isMuted, setIsMuted] = useState<boolean>(false);
 
   // Simulated live audio levels
   const [vuHeights, setVuHeights] = useState<number[]>([12, 18, 24, 16, 22, 14, 20]);
@@ -197,6 +199,100 @@ export const MaterialAmoledPreview: React.FC = () => {
                       <RotateCw className="w-3 h-3" />
                       Retry
                     </button>
+                  </div>
+                </div>
+
+                {/* Digital Volume Control Card */}
+                <div className="bg-[#111215] border border-white/5 rounded-3xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-400 tracking-wider uppercase flex items-center gap-1.5">
+                      <Volume2 className="w-3.5 h-3.5 text-purple-300" />
+                      Output Volume
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          const nextMuted = !isMuted;
+                          setIsMuted(nextMuted);
+                          triggerToast(nextMuted ? 'Audio Muted' : 'Audio Unmuted');
+                        }}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1 border transition-all active:scale-95 ${
+                          isMuted
+                            ? 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                            : 'bg-[#181a1f] border-white/10 text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {isMuted ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+                        <span>{isMuted ? 'Muted' : 'Unmuted'}</span>
+                      </button>
+                      <span className="font-mono text-sm font-bold text-purple-200 w-10 text-right">
+                        {isMuted ? '0%' : `${volume}%`}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Volume Slider + / - */}
+                  <div className="flex items-center gap-3 py-1">
+                    <button
+                      onClick={() => {
+                        const next = Math.max(0, volume - 5);
+                        setVolume(next);
+                        if (isMuted) setIsMuted(false);
+                        triggerToast(`Volume ${next}%`);
+                      }}
+                      className="w-7 h-7 rounded-full bg-[#181a1f] hover:bg-[#21242b] text-slate-200 flex items-center justify-center border border-white/5 active:scale-90 transition-transform"
+                    >
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={volume}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setVolume(val);
+                        if (isMuted && val > 0) setIsMuted(false);
+                      }}
+                      className="flex-1 accent-[#d0bcff] cursor-pointer h-2 bg-[#21242b] rounded-full"
+                    />
+                    <button
+                      onClick={() => {
+                        const next = Math.min(100, volume + 5);
+                        setVolume(next);
+                        if (isMuted) setIsMuted(false);
+                        triggerToast(`Volume ${next}%`);
+                      }}
+                      className="w-7 h-7 rounded-full bg-[#181a1f] hover:bg-[#21242b] text-slate-200 flex items-center justify-center border border-white/5 active:scale-90 transition-transform"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Quick Preset Buttons */}
+                  <div className="grid grid-cols-4 gap-1.5 pt-1">
+                    {[
+                      { val: 20, label: '20% Soft' },
+                      { val: 50, label: '50% Mid' },
+                      { val: 75, label: '75% Loud' },
+                      { val: 100, label: '100% Max' },
+                    ].map((p) => (
+                      <button
+                        key={p.val}
+                        onClick={() => {
+                          setVolume(p.val);
+                          if (isMuted) setIsMuted(false);
+                          triggerToast(`Volume ${p.val}%`);
+                        }}
+                        className={`py-1.5 rounded-xl text-[10px] font-semibold border transition-all ${
+                          volume === p.val && !isMuted
+                            ? 'bg-[#381e72] border-purple-400/40 text-purple-200'
+                            : 'bg-[#181a1f] border-white/5 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
 

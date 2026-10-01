@@ -42,6 +42,10 @@ void loadPreferences() {
   g_settings.oledEnabled = g_preferences.getBool("oled", true);
   g_settings.streamEnabled = g_preferences.getBool("enabled", true);
   g_settings.targetBufferMs = g_preferences.getUShort("buffer", 180);
+  g_settings.volume = g_preferences.getUChar("volume", 50);
+  g_settings.muted = g_preferences.getBool("muted", false);
+  AudioI2S::instance().setVolume(g_settings.volume);
+  AudioI2S::instance().setMute(g_settings.muted);
 }
 
 void savePreferences() {
@@ -54,6 +58,8 @@ void savePreferences() {
   g_preferences.putBool("oled", g_settings.oledEnabled);
   g_preferences.putBool("enabled", g_settings.streamEnabled);
   g_preferences.putUShort("buffer", g_settings.targetBufferMs);
+  g_preferences.putUChar("volume", g_settings.volume);
+  g_preferences.putBool("muted", g_settings.muted);
 }
 
 void restartStreaming() {

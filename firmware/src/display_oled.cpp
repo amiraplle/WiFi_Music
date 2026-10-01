@@ -8,7 +8,13 @@ DisplayOLED& DisplayOLED::instance() {
 }
 
 DisplayOLED::DisplayOLED()
-  : _u8g2(U8G2_R0, U8X8_PIN_NONE), _available(false), _enabled(true), _vuLevel(0), _lastRenderMs(0) {
+  : _u8g2(U8G2_R0, U8X8_PIN_NONE), _available(false), _enabled(true), _vuLevel(0), _lastRenderMs(0), _volumeOverlayUntilMs(0), _displayVolume(50), _displayMuted(false) {
+}
+
+void DisplayOLED::showVolume(uint8_t vol, bool muted) {
+  _displayVolume = vol;
+  _displayMuted = muted;
+  _volumeOverlayUntilMs = millis() + 1800;
 }
 
 void DisplayOLED::begin() {
@@ -47,6 +53,27 @@ void DisplayOLED::update(ReceiverState state, const StreamFormat& format, uint8_
   _lastRenderMs = millis();
 
   _u8g2.clearBuffer();
+
+  // Temporary Volume Popup Overlay
+  if (millis() < _volumeOverlayUntilMs) {
+    if (_displayMuted) {
+      drawCentered("MUTED", 16, u8g2_font_6x10_tf);
+    } else {
+      char vStr[16];
+      snprintf(vStr, sizeof(vStr), "VOL: %u%%", _displayVolume);
+      drawCentered(vStr, 16, u8g2_font_6x10_tf);
+    }
+
+    // Centered horizontal volume bar
+    _u8g2.drawFrame(4, 24, OLED_WIDTH - 8, 8);
+    if (!_displayMuted && _displayVolume > 0) {
+      uint8_t fillW = (uint8_t)(((OLED_WIDTH - 12) * _displayVolume) / 100);
+      _u8g2.drawBox(6, 26, fillW, 4);
+    }
+    _u8g2.sendBuffer();
+    return;
+  }
+
   _u8g2.setFont(u8g2_font_5x7_tf);
   _u8g2.drawStr(0, 7, "C3 MUSIC");
 
