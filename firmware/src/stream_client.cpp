@@ -34,7 +34,7 @@ bool StreamClient::readExact(uint8_t* buf, size_t len, uint32_t timeoutMs) {
   while (got < len) {
     int av = _client.available();
     if (av > 0) {
-      size_t toRead = min((size_t)av, len - got);
+      size_t toRead = min((size_t)av, (size_t)(len - got));
       int n = _client.read(buf + got, toRead);
       if (n > 0) {
         got += n;
@@ -118,7 +118,7 @@ bool StreamClient::parseWavHeader(StreamFormat& outFormat) {
       uint8_t discard[64];
       uint32_t rem = chunkSize;
       while (rem > 0) {
-        size_t toRead = min((uint32_t)sizeof(discard), rem);
+        size_t toRead = min((size_t)sizeof(discard), (size_t)rem);
         if (!readExact(discard, toRead, 3000)) return false;
         rem -= toRead;
       }
@@ -180,7 +180,7 @@ bool StreamClient::connectHttp(const String& host, uint16_t port) {
 void StreamClient::processStream() {
   int availableBytes = _client.available();
   if (availableBytes > 0) {
-    size_t toRead = min((size_t)availableBytes, sizeof(_networkBuffer));
+    size_t toRead = min((size_t)availableBytes, (size_t)sizeof(_networkBuffer));
     int bytesRead = _client.read(_networkBuffer, toRead);
 
     if (bytesRead > 0) {

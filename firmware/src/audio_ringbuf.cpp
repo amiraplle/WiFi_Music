@@ -29,7 +29,7 @@ bool AudioRingBuffer::write(const uint8_t* data, size_t length) {
     ok = false;
   }
 
-  size_t first = min(length, AUDIO_RING_BYTES - _writeIndex);
+  size_t first = min(length, (size_t)(AUDIO_RING_BYTES - _writeIndex));
   memcpy(_buffer + _writeIndex, data, first);
   size_t second = length - first;
   if (second > 0) {
@@ -50,9 +50,10 @@ size_t AudioRingBuffer::read(uint8_t* destination, size_t maxLen) {
   if (!destination || maxLen == 0) return 0;
 
   portENTER_CRITICAL(&_mux);
-  size_t len = min(maxLen, _count);
+  size_t availableCount = _count;
+  size_t len = min(maxLen, availableCount);
   if (len > 0) {
-    size_t first = min(len, AUDIO_RING_BYTES - _readIndex);
+    size_t first = min(len, (size_t)(AUDIO_RING_BYTES - _readIndex));
     memcpy(destination, _buffer + _readIndex, first);
     size_t second = len - first;
     if (second > 0) {
