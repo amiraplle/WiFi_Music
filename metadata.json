@@ -1,0 +1,6 @@
+{
+  "name": "ESP32-C3 UDA1334A Audio Streamer Studio",
+  "description": "Firmware generator, wiring visualizer, diagnostic tool, and live stream tester for ESP32-C3 SuperMini with 0.42-inch OLED and UDA1334A I2S DAC.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
